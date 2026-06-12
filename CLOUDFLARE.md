@@ -1,23 +1,24 @@
-# Cloudflare Pages Deployment
+# Cloudflare Workers + KV Deployment
 
-Build command:
+The project uses `worker.js` as the Worker entry point. It serves the Vite build
+through the `ASSETS` binding and handles the state API directly.
+
+Install and build:
 
 ```text
+npm install
 npm run build
 ```
 
-Build output directory:
+Configure these bindings in the Cloudflare Worker dashboard:
 
-```text
-dist
-```
-
-Configure these bindings in the Cloudflare Pages project:
-
-- Environment variable `ADMIN_TOKEN`: administrator publishing token.
+- Secret `ADMIN_TOKEN`: administrator publishing token.
 - KV namespace binding `MAJOR_STATE`: stores the published default simulator state.
 
-The Pages Function endpoints are:
+Then deploy:
 
-- `GET /api/state`: returns the published default state.
-- `POST /api/state`: publishes the current state with `Authorization: Bearer <ADMIN_TOKEN>`.
+```text
+npm run deploy
+```
+
+The Worker endpoints are `GET /api/state` and `POST /api/state`.
