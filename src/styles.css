@@ -121,6 +121,9 @@ main { max-width: 1800px; margin: auto; }
 .admin-status { min-height: 42px; margin: 14px 0; padding: 10px; color: #777b84; border: 1px solid #292c33; background: #0c0d11; font: 8px/1.6 "IBM Plex Mono"; }
 .admin-status.success { color: #25e9ff; border-color: rgba(37,233,255,.35); }
 .admin-status.error { color: #ff5576; border-color: rgba(255,85,118,.35); }
+.data-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.data-actions button, .data-actions label { padding: 12px; cursor: pointer; font: 700 9px "IBM Plex Mono"; letter-spacing: .1em; text-align: center; text-transform: uppercase; }
+.data-actions label input { display: none; }
 
 .swiss-scroll { padding: 42px 4vw 70px; overflow-x: auto; scrollbar-color: var(--acid) #18191d; }
 .swiss-board { min-width: 1240px; display: grid; grid-template-columns: repeat(5, 180px) 210px; gap: 26px; align-items: start; justify-content: center; }
@@ -253,6 +256,7 @@ footer { padding: 22px 4vw; display: flex; justify-content: space-between; color
   .event-pill { display: none; }
   .header-actions { gap: 8px; }
   .admin-btn { padding-inline: 8px; }
+  .header-actions .admin-btn:first-child { display: none; }
   .hero { padding-top: 48px; display: block; }
   h1 { font-size: clamp(44px, 14vw, 70px); }
   .hero-stats { margin-top: 35px; min-width: 0; }

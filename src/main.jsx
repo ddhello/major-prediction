@@ -280,6 +280,21 @@ function AdminPanel({ status, onPublish, onClose }) {
   );
 }
 
+function DataPanel({ status, onExport, onImport, onClose }) {
+  return (
+    <div className="editor-backdrop" onClick={onClose}>
+      <section className="admin-panel data-panel" onClick={event => event.stopPropagation()}>
+        <header><div><span>LOCAL DATA</span><h2>导入 / 导出 JSON</h2><p>导出当前队伍和比赛结果，或从本地 JSON 恢复完整状态。</p></div><button className="editor-close" onClick={onClose}>×</button></header>
+        <div className={`admin-status ${status.type}`}>{status.message}</div>
+        <div className="data-actions">
+          <button className="secondary-action" onClick={onExport}>导出当前状态</button>
+          <label className="primary-action">导入 JSON<input type="file" accept="application/json,.json" onChange={event => onImport(event.target.files?.[0])} /></label>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function SwissStage({ number, simulation, onPick, locked, onNavigate, onEditTeams }) {
   if (locked) {
     return (
@@ -364,6 +379,8 @@ function App() {
   const [editorStage, setEditorStage] = useState(null);
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminStatus, setAdminStatus] = useState({ type: "idle", message: "当前全部赛事状态将作为网站默认状态发布。" });
+  const [dataOpen, setDataOpen] = useState(false);
+  const [dataStatus, setDataStatus] = useState({ type: "idle", message: "JSON 文件仅保存在本地，不会自动上传。" });
   const [remoteLoaded, setRemoteLoaded] = useState(false);
   const stage1 = useMemo(() => deriveSwiss(toSeedOrderFromFirstRound(stageOneTeams), stagePicks[0]), [stageOneTeams, stagePicks]);
   const stage2Participants = useMemo(() => stage1.complete ? [...orderTeams(stageTwoInvites, stageTwoInviteOrder), ...stage1.seededQualified] : [], [stage1, stageTwoInvites]);
@@ -459,11 +476,42 @@ function App() {
       setAdminStatus({ type: "error", message: error.message || "发布失败，请检查 Cloudflare 配置。" });
     }
   }
+  function currentState() {
+    return { version: 1, exportedAt: new Date().toISOString(), activePage, stageOneTeams, stageTwoInvites, stageThreeInvites, stagePicks, playoffRounds };
+  }
+  function exportState() {
+    const blob = new Blob([JSON.stringify(currentState(), null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `major-simulator-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setDataStatus({ type: "success", message: "当前队伍和比赛结果已导出。" });
+  }
+  async function importState(file) {
+    if (!file) return;
+    try {
+      const state = JSON.parse(await file.text());
+      if (state.stageOneTeams?.length !== 16 || state.stageTwoInvites?.length !== 8 || state.stageThreeInvites?.length !== 8 || state.stagePicks?.length !== 3 || !Array.isArray(state.playoffRounds)) {
+        throw new Error("JSON 文件不是有效的模拟器状态。");
+      }
+      setStageOneTeams(state.stageOneTeams.map(normalizeTeam));
+      setStageTwoInvites(state.stageTwoInvites.map(normalizeTeam));
+      setStageThreeInvites(state.stageThreeInvites.map(normalizeTeam));
+      setStagePicks(state.stagePicks);
+      setPlayoffRounds(state.playoffRounds);
+      setActivePage(Number.isInteger(state.activePage) ? Math.min(3, Math.max(0, state.activePage)) : 0);
+      setDataStatus({ type: "success", message: `导入成功：${file.name}` });
+    } catch (error) {
+      setDataStatus({ type: "error", message: error.message || "无法读取 JSON 文件。" });
+    }
+  }
 
   const simulations = [stage1, stage2, stage3];
   return (
     <div className="app-shell">
-      <header className="site-header"><a className="brand" href="#" onClick={event => { event.preventDefault(); navigate(0); }}><span className="brand-icon">M</span><span><strong>MAJOR</strong><small>SIMULATOR</small></span></a><div className="event-pill"><span className="live-dot" /> COLOGNE 2026</div><div className="header-actions"><button className="admin-btn" onClick={() => setAdminOpen(true)}>管理员发布</button><button className="reset-btn" onClick={reset}>重新开始 ↺</button></div></header>
+      <header className="site-header"><a className="brand" href="#" onClick={event => { event.preventDefault(); navigate(0); }}><span className="brand-icon">M</span><span><strong>MAJOR</strong><small>SIMULATOR</small></span></a><div className="event-pill"><span className="live-dot" /> COLOGNE 2026</div><div className="header-actions"><button className="admin-btn" onClick={() => setDataOpen(true)}>导入 / 导出</button><button className="admin-btn" onClick={() => setAdminOpen(true)}>管理员发布</button><button className="reset-btn" onClick={reset}>重新开始 ↺</button></div></header>
       <main>
         <nav className="stage-nav">{navItems.map(item => <button key={item.id} className={activePage === item.id ? "active" : ""} onClick={() => navigate(item.id)}><span>{item.icon}</span>{item.label}{item.id > 0 && !simulations[item.id - 1]?.complete && <i>LOCKED</i>}</button>)}</nav>
         {activePage < 3 ? <SwissStage number={activePage + 1} simulation={simulations[activePage]} locked={activePage > 0 && !simulations[activePage - 1].complete} onPick={(r, m, team) => pickSwiss(activePage, r, m, team)} onNavigate={navigate} onEditTeams={() => setEditorStage(activePage + 1)} /> : <Champions rounds={playoffRounds} onPick={pickPlayoff} locked={!stage3.complete} onNavigate={navigate} />}
@@ -473,6 +521,7 @@ function App() {
       {editorStage === 2 && <TeamEditor teams={stageTwoInvites} defaults={defaultStageTwoInvites} stageNumber={2} onSave={saveStageTwoInvites} onClose={() => setEditorStage(null)} />}
       {editorStage === 3 && <TeamEditor teams={stageThreeInvites} defaults={defaultStageThreeInvites} stageNumber={3} onSave={saveStageThreeInvites} onClose={() => setEditorStage(null)} />}
       {adminOpen && <AdminPanel status={adminStatus} onPublish={publishDefaultState} onClose={() => setAdminOpen(false)} />}
+      {dataOpen && <DataPanel status={dataStatus} onExport={exportState} onImport={importState} onClose={() => setDataOpen(false)} />}
     </div>
   );
 }
