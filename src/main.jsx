@@ -318,12 +318,20 @@ function TeamMark({ team, small = false }) {
   );
 }
 
-function SwissMatch({ match, onPick, finished }) {
+function SwissMatch({ match, onPick, finished, recommended }) {
+  const teamButton = team => (
+    <button className={`swiss-team ${match.winner?.name === team.name ? "selected" : ""} ${match.winner?.name !== team.name ? "dimmed" : ""} ${recommended === team.name ? "recommended" : ""}`} onClick={event => onPick(match.roundIndex, match.matchIndex, team, event)}>
+      <span className="swiss-team-mark">
+        <TeamMark team={team} small />
+        {recommended === team.name && <span className="recommendation-star" title="这支队伍获胜更有利于你的预测">★</span>}
+      </span>
+    </button>
+  );
   return (
     <article className={`swiss-match ${match.winner ? "decided" : ""} ${finished ? "finished" : ""}`}>
-      <button className={`swiss-team ${match.winner?.name === match.a.name ? "selected" : ""} ${match.winner?.name === match.b.name ? "dimmed" : ""}`} onClick={event => onPick(match.roundIndex, match.matchIndex, match.a, event)}><TeamMark team={match.a} small /></button>
+      {teamButton(match.a)}
       <div className="record-label">{match.record}</div>
-      <button className={`swiss-team ${match.winner?.name === match.b.name ? "selected" : ""} ${match.winner?.name === match.a.name ? "dimmed" : ""}`} onClick={event => onPick(match.roundIndex, match.matchIndex, match.b, event)}><TeamMark team={match.b} small /></button>
+      {teamButton(match.b)}
     </article>
   );
 }
@@ -448,7 +456,6 @@ function PredictionPanel({ stageNumber, teams, value, onSave, onAnalyze, analysi
   }
 
   const complete = predictionGroups.every(group => (draft[group.key] ?? []).length === group.limit);
-  const passRate = outcome => outcome?.total ? outcome.passing / outcome.total : 0;
   return (
     <div className="editor-backdrop" onClick={onClose}>
       <section className="prediction-panel" onClick={event => event.stopPropagation()}>
@@ -480,29 +487,6 @@ function PredictionPanel({ stageNumber, teams, value, onSave, onAnalyze, analysi
           {analysis?.running && <p>正在遍历，已检查 {analysis.total.toLocaleString()} 种赛果...</p>}
           {analysis?.truncated && <p>未结束比赛过多，已达到 2,000,000 种安全上限；当前数字为已验证下界。</p>}
         </section>
-        {analysis?.recommendations?.length > 0 && <section className="match-recommendations">
-          <header><div><span>NEXT ROUND GUIDE</span><h3>谁赢更容易通过</h3></div><small>{analysis.truncated ? "基于已遍历路径的参考通过率" : "基于全部剩余赛果的精确通过率"}</small></header>
-          <div className="recommendation-grid">{analysis.recommendations.map(match => {
-            const aOutcome = match.outcomes[match.a.name];
-            const bOutcome = match.outcomes[match.b.name];
-            const aRate = passRate(aOutcome);
-            const bRate = passRate(bOutcome);
-            const recommended = aRate === bRate ? null : aRate > bRate ? match.a.name : match.b.name;
-            return <article className="recommendation-card" key={`${match.roundIndex}-${match.matchIndex}`}>
-              <div className="recommendation-round">ROUND {match.roundIndex + 1} · MATCH {match.matchIndex + 1}</div>
-              {[match.a, match.b].map(team => {
-                const outcome = match.outcomes[team.name];
-                const rate = passRate(outcome);
-                return <div className={`recommendation-team ${recommended === team.name ? "recommended" : ""}`} key={team.name}>
-                  <TeamMark team={team} small />
-                  <span>{team.name}</span>
-                  <strong>{outcome.total ? `${(rate * 100).toFixed(1)}%` : "无有效路径"}</strong>
-                </div>;
-              })}
-              <footer>{recommended ? `推荐 ${recommended} 获胜` : "双方对你的通过率影响相同"}</footer>
-            </article>;
-          })}</div>
-        </section>}
         <footer className="editor-actions">
           <span>{complete ? "选择完整，可以保存并分析。" : "请填满 3:0、晋级和 0:3 的所有位置。"}</span>
           <button className="secondary-action" onClick={() => setDraft(emptyPrediction())}>清空</button>
@@ -514,7 +498,14 @@ function PredictionPanel({ stageNumber, teams, value, onSave, onAnalyze, analysi
   );
 }
 
-function SwissStage({ number, simulation, onPick, locked, onNavigate, onEditTeams, onOpenPrediction, finishedMatches }) {
+function SwissStage({ number, simulation, onPick, locked, onNavigate, onEditTeams, onOpenPrediction, finishedMatches, recommendations }) {
+  const recommendedByMatch = new Map((recommendations ?? []).map(match => {
+    const aOutcome = match.outcomes[match.a.name];
+    const bOutcome = match.outcomes[match.b.name];
+    const aRate = aOutcome?.total ? aOutcome.passing / aOutcome.total : 0;
+    const bRate = bOutcome?.total ? bOutcome.passing / bOutcome.total : 0;
+    return [`${match.roundIndex}-${match.matchIndex}`, aRate === bRate ? null : aRate > bRate ? match.a.name : match.b.name];
+  }));
   if (locked) {
     return (
       <section className="locked-panel">
@@ -542,7 +533,7 @@ function SwissStage({ number, simulation, onPick, locked, onNavigate, onEditTeam
               <div className="swiss-round-content">
                 {roundIndex === 3 && <ResultGroup title="晋级" teams={simulation.outcomeGroups["3:0"]} tone="qualified" record="3:0" />}
                 {roundIndex === 4 && <ResultGroup title="晋级" teams={simulation.outcomeGroups["3:1"]} tone="qualified" record="3:1" />}
-                <div className="round-matches">{round.map(match => <SwissMatch key={match.matchIndex} match={match} onPick={onPick} finished={finishedMatches.has(`swiss:${number - 1}:${match.roundIndex}:${match.matchIndex}`)} />)}</div>
+                <div className="round-matches">{round.map(match => <SwissMatch key={match.matchIndex} match={match} onPick={onPick} finished={finishedMatches.has(`swiss:${number - 1}:${match.roundIndex}:${match.matchIndex}`)} recommended={recommendedByMatch.get(`${match.roundIndex}-${match.matchIndex}`)} />)}</div>
                 {roundIndex === 3 && <ResultGroup title="淘汰" teams={simulation.outcomeGroups["0:3"]} tone="eliminated" record="0:3" />}
                 {roundIndex === 4 && <ResultGroup title="淘汰" teams={simulation.outcomeGroups["1:3"]} tone="eliminated" record="1:3" />}
               </div>
@@ -824,7 +815,7 @@ function App() {
       <header className="site-header"><a className="brand" href="#" onClick={event => { event.preventDefault(); navigate(0); }}><span className="brand-icon">M</span><span><strong>MAJOR</strong><small>SIMULATOR</small></span></a><div className="event-pill"><span className="live-dot" /> COLOGNE 2026</div><div className="header-actions"><button className="admin-btn" onClick={() => setDataOpen(true)}>导入 / 导出</button><button className="admin-btn" onClick={() => setAdminOpen(true)}>管理员发布</button><button className="reset-btn" onClick={reset}>重新开始 ↺</button></div></header>
       <main>
         <nav className="stage-nav">{navItems.map(item => <button key={item.id} className={activePage === item.id ? "active" : ""} onClick={() => navigate(item.id)}><span>{item.icon}</span>{item.label}{item.id > 0 && !simulations[item.id - 1]?.complete && <i>LOCKED</i>}</button>)}</nav>
-        {activePage < 3 ? <SwissStage number={activePage + 1} simulation={simulations[activePage]} locked={activePage > 0 && !simulations[activePage - 1].complete} onPick={(r, m, team, event) => pickSwiss(activePage, r, m, team, event)} onNavigate={navigate} onEditTeams={() => setEditorStage(activePage + 1)} onOpenPrediction={() => setPredictionStage(activePage)} finishedMatches={finishedMatches} /> : <Champions rounds={playoffRounds} onPick={pickPlayoff} locked={!stage3.complete} onNavigate={navigate} finishedMatches={finishedMatches} />}
+        {activePage < 3 ? <SwissStage number={activePage + 1} simulation={simulations[activePage]} locked={activePage > 0 && !simulations[activePage - 1].complete} onPick={(r, m, team, event) => pickSwiss(activePage, r, m, team, event)} onNavigate={navigate} onEditTeams={() => setEditorStage(activePage + 1)} onOpenPrediction={() => setPredictionStage(activePage)} finishedMatches={finishedMatches} recommendations={predictionAnalysis[activePage]?.recommendations} /> : <Champions rounds={playoffRounds} onPick={pickPlayoff} locked={!stage3.complete} onNavigate={navigate} finishedMatches={finishedMatches} />}
       </main>
       <footer><span>MAJOR SIMULATOR / 2026</span><span>三胜晋级 · 三负淘汰 · 最终进入淘汰赛</span></footer>
       {editorStage === 1 && <TeamEditor teams={stageOneTeams} defaults={defaultStageOneTeams} stageNumber={1} onSave={saveStageOneTeams} onClose={() => setEditorStage(null)} />}
