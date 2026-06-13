@@ -199,10 +199,29 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
       fixedByPair.set([match.a.name, match.b.name].sort().join("|"), { winner: match.winner.name, roundIndex: match.roundIndex });
     }
   });
+  const nextRound = simulation.rounds.find(round =>
+    round.some(match => !finishedMatches.has(`swiss:${stageIndex}:${match.roundIndex}:${match.matchIndex}`))
+  ) ?? [];
+  const recommendationByPair = new Map(nextRound
+    .filter(match => !finishedMatches.has(`swiss:${stageIndex}:${match.roundIndex}:${match.matchIndex}`))
+    .map(match => {
+      const pairKey = [match.a.name, match.b.name].sort().join("|");
+      return [pairKey, {
+        roundIndex: match.roundIndex,
+        matchIndex: match.matchIndex,
+        a: match.a,
+        b: match.b,
+        outcomes: {
+          [match.a.name]: { total: 0, passing: 0 },
+          [match.b.name]: { total: 0, passing: 0 },
+        },
+      }];
+    }));
 
   const records = new Map(participants.map((team, seed) => [team.name, { team, seed, wins: 0, losses: 0, opponents: [] }]));
   const played = new Set();
   const usedFixed = new Set();
+  const recommendationWinners = new Map();
   const stats = { total: 0, passing: 0, best: 0, worst: 10, explored: 0, truncated: false };
   const maxLeaves = 2_000_000;
 
@@ -211,10 +230,17 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
     if (!active.length || roundIndex >= 5) {
       if (usedFixed.size !== fixedByPair.size) return;
       const score = predictionScore([...records.values()], prediction);
+      const passed = score >= 5;
       stats.total += 1;
-      if (score >= 5) stats.passing += 1;
+      if (passed) stats.passing += 1;
       stats.best = Math.max(stats.best, score);
       stats.worst = Math.min(stats.worst, score);
+      recommendationWinners.forEach((winnerName, pairKey) => {
+        const outcome = recommendationByPair.get(pairKey)?.outcomes[winnerName];
+        if (!outcome) return;
+        outcome.total += 1;
+        if (passed) outcome.passing += 1;
+      });
       stats.explored += 1;
       if (stats.explored % 20000 === 0) {
         onProgress({ ...stats });
@@ -245,7 +271,9 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
         b.opponents.push(a.team.name);
         played.add(pairKey);
         if (fixedWinner) usedFixed.add(pairKey);
+        if (recommendationByPair.has(pairKey)) recommendationWinners.set(pairKey, winnerName);
         await playMatch(matchIndex + 1);
+        if (recommendationByPair.has(pairKey)) recommendationWinners.delete(pairKey);
         if (fixedWinner) usedFixed.delete(pairKey);
         played.delete(pairKey);
         a.opponents.pop();
@@ -260,7 +288,7 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
 
   await playRound(0);
   if (!stats.total) stats.worst = 0;
-  return stats;
+  return { ...stats, recommendations: [...recommendationByPair.values()] };
 }
 
 function createBracket(teams) {
@@ -420,6 +448,7 @@ function PredictionPanel({ stageNumber, teams, value, onSave, onAnalyze, analysi
   }
 
   const complete = predictionGroups.every(group => (draft[group.key] ?? []).length === group.limit);
+  const passRate = outcome => outcome?.total ? outcome.passing / outcome.total : 0;
   return (
     <div className="editor-backdrop" onClick={onClose}>
       <section className="prediction-panel" onClick={event => event.stopPropagation()}>
@@ -451,6 +480,29 @@ function PredictionPanel({ stageNumber, teams, value, onSave, onAnalyze, analysi
           {analysis?.running && <p>正在遍历，已检查 {analysis.total.toLocaleString()} 种赛果...</p>}
           {analysis?.truncated && <p>未结束比赛过多，已达到 2,000,000 种安全上限；当前数字为已验证下界。</p>}
         </section>
+        {analysis?.recommendations?.length > 0 && <section className="match-recommendations">
+          <header><div><span>NEXT ROUND GUIDE</span><h3>谁赢更容易通过</h3></div><small>{analysis.truncated ? "基于已遍历路径的参考通过率" : "基于全部剩余赛果的精确通过率"}</small></header>
+          <div className="recommendation-grid">{analysis.recommendations.map(match => {
+            const aOutcome = match.outcomes[match.a.name];
+            const bOutcome = match.outcomes[match.b.name];
+            const aRate = passRate(aOutcome);
+            const bRate = passRate(bOutcome);
+            const recommended = aRate === bRate ? null : aRate > bRate ? match.a.name : match.b.name;
+            return <article className="recommendation-card" key={`${match.roundIndex}-${match.matchIndex}`}>
+              <div className="recommendation-round">ROUND {match.roundIndex + 1} · MATCH {match.matchIndex + 1}</div>
+              {[match.a, match.b].map(team => {
+                const outcome = match.outcomes[team.name];
+                const rate = passRate(outcome);
+                return <div className={`recommendation-team ${recommended === team.name ? "recommended" : ""}`} key={team.name}>
+                  <TeamMark team={team} small />
+                  <span>{team.name}</span>
+                  <strong>{outcome.total ? `${(rate * 100).toFixed(1)}%` : "无有效路径"}</strong>
+                </div>;
+              })}
+              <footer>{recommended ? `推荐 ${recommended} 获胜` : "双方对你的通过率影响相同"}</footer>
+            </article>;
+          })}</div>
+        </section>}
         <footer className="editor-actions">
           <span>{complete ? "选择完整，可以保存并分析。" : "请填满 3:0、晋级和 0:3 的所有位置。"}</span>
           <button className="secondary-action" onClick={() => setDraft(emptyPrediction())}>清空</button>
