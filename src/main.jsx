@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useMemo, useState } from "react";
+import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -192,7 +192,7 @@ function predictionScore(records, prediction) {
     + (prediction["0:3"] ?? []).filter(name => finalByName.get(name)?.wins === 0 && finalByName.get(name)?.losses === 3).length;
 }
 
-async function analyzeSwissPossibilities(participants, simulation, finishedMatches, stageIndex, prediction, onProgress) {
+async function analyzeSwissPossibilities(participants, simulation, finishedMatches, stageIndex, prediction, onProgress, shouldCancel = () => false) {
   const fixedByPair = new Map();
   simulation.rounds.flat().forEach(match => {
     if (finishedMatches.has(`swiss:${stageIndex}:${match.roundIndex}:${match.matchIndex}`)) {
@@ -233,6 +233,7 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
   const maxLeaves = 2_000_000;
 
   async function playRound(roundIndex) {
+    if (shouldCancel()) return;
     const active = [...records.values()].filter(record => record.wins < 3 && record.losses < 3);
     if (!active.length || roundIndex >= 5) {
       if (usedFixed.size !== fixedByPair.size) return;
@@ -254,6 +255,7 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
       if (stats.explored % 20000 === 0) {
         onProgress({ ...stats });
         await new Promise(resolve => setTimeout(resolve, 0));
+        if (shouldCancel()) return;
       }
       if (stats.explored >= maxLeaves) stats.truncated = true;
       return;
@@ -263,7 +265,7 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
       : pairTeams(active, played, records, roundIndex);
 
     async function playMatch(matchIndex) {
-      if (stats.truncated) return;
+      if (stats.truncated || shouldCancel()) return;
       if (matchIndex >= pairs.length) return playRound(roundIndex + 1);
       const [a, b] = pairs[matchIndex];
       const pairKey = [a.team.name, b.team.name].sort().join("|");
@@ -608,6 +610,7 @@ function App() {
   const [outcomePredictions, setOutcomePredictions] = useState(() => normalizePredictions(savedState.outcomePredictions));
   const [predictionStage, setPredictionStage] = useState(null);
   const [predictionAnalysis, setPredictionAnalysis] = useState([null, null, null]);
+  const analysisRuns = useRef([0, 0, 0]);
   const [editorStage, setEditorStage] = useState(null);
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminStatus, setAdminStatus] = useState({ type: "idle", message: "当前全部赛事状态将作为网站默认状态发布。" });
@@ -692,6 +695,7 @@ function App() {
     setActivePage(page);
   }
   function toggleFinished(id) {
+    analysisRuns.current = analysisRuns.current.map(run => run + 1);
     setPredictionAnalysis([null, null, null]);
     setFinishedMatches(current => {
       const next = new Set(current);
@@ -703,6 +707,7 @@ function App() {
     const id = `swiss:${stageIndex}:${roundIndex}:${matchIndex}`;
     if (finishedMatches.has(id) && !event.ctrlKey) return;
     if (event.ctrlKey) toggleFinished(id);
+    analysisRuns.current[stageIndex] += 1;
     setPredictionAnalysis(current => current.map((value, index) => index === stageIndex ? null : value));
     setStagePicks(current => current.map((picks, index) => {
       if (index < stageIndex) return picks;
@@ -815,16 +820,33 @@ function App() {
     setPredictionAnalysis(current => current.map((value, index) => index === stageIndex ? null : value));
   }
 
-  async function analyzeOutcomePrediction(stageIndex, prediction) {
+  async function analyzeOutcomePrediction(stageIndex, prediction, save = true) {
     const participants = stageParticipants[stageIndex];
     if (participants.length !== 16) return;
-    saveOutcomePrediction(stageIndex, prediction);
+    const normalized = normalizePrediction(prediction);
+    if (save) setOutcomePredictions(current => current.map((value, index) => index === stageIndex ? normalized : value));
+    const runId = analysisRuns.current[stageIndex] + 1;
+    analysisRuns.current[stageIndex] = runId;
     setPredictionAnalysis(current => current.map((value, index) => index === stageIndex ? { total: 0, passing: 0, best: 0, worst: 10, running: true, truncated: false } : value));
-    const result = await analyzeSwissPossibilities(participants, [stage1, stage2, stage3][stageIndex], finishedMatches, stageIndex, prediction, progress => {
+    const result = await analyzeSwissPossibilities(participants, [stage1, stage2, stage3][stageIndex], finishedMatches, stageIndex, normalized, progress => {
+      if (analysisRuns.current[stageIndex] !== runId) return;
       setPredictionAnalysis(current => current.map((value, index) => index === stageIndex ? { ...progress, running: true } : value));
-    });
+    }, () => analysisRuns.current[stageIndex] !== runId);
+    if (analysisRuns.current[stageIndex] !== runId) return;
     setPredictionAnalysis(current => current.map((value, index) => index === stageIndex ? { ...result, running: false } : value));
   }
+
+  useEffect(() => {
+    if (!remoteLoaded || activePage > 2) return;
+    const prediction = normalizePrediction(outcomePredictions[activePage]);
+    const complete = predictionGroups.every(group => prediction[group.key].length === group.limit);
+    if (!complete || stageParticipants[activePage].length !== 16) return;
+    const timer = setTimeout(() => analyzeOutcomePrediction(activePage, prediction, false), 350);
+    return () => {
+      clearTimeout(timer);
+      analysisRuns.current[activePage] += 1;
+    };
+  }, [activePage, stagePicks, finishedMatches, remoteLoaded]);
 
   const simulations = [stage1, stage2, stage3];
   return (
