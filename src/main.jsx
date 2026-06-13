@@ -199,10 +199,12 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
       fixedByPair.set([match.a.name, match.b.name].sort().join("|"), { winner: match.winner.name, roundIndex: match.roundIndex });
     }
   });
-  const nextRound = simulation.rounds.find(round =>
-    round.some(match => !finishedMatches.has(`swiss:${stageIndex}:${match.roundIndex}:${match.matchIndex}`))
-  ) ?? [];
-  const recommendationByPair = new Map(nextRound
+  const preferredByPair = new Map(simulation.rounds.flat().map(match => [
+    [match.a.name, match.b.name].sort().join("|"),
+    match.winner.name,
+  ]));
+  const recommendationMatches = simulation.rounds.flat();
+  const recommendationByPair = new Map(recommendationMatches
     .filter(match => !finishedMatches.has(`swiss:${stageIndex}:${match.roundIndex}:${match.matchIndex}`))
     .map(match => {
       const pairKey = [match.a.name, match.b.name].sort().join("|");
@@ -211,6 +213,10 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
         matchIndex: match.matchIndex,
         a: match.a,
         b: match.b,
+        requiredPrefix: simulation.rounds.slice(0, match.roundIndex).flat().map(previous => ({
+          pairKey: [previous.a.name, previous.b.name].sort().join("|"),
+          winner: previous.winner.name,
+        })),
         outcomes: {
           [match.a.name]: { total: 0, passing: 0 },
           [match.b.name]: { total: 0, passing: 0 },
@@ -222,6 +228,7 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
   const played = new Set();
   const usedFixed = new Set();
   const recommendationWinners = new Map();
+  const pathWinners = new Map();
   const stats = { total: 0, passing: 0, best: 0, worst: 10, explored: 0, truncated: false };
   const maxLeaves = 2_000_000;
 
@@ -236,7 +243,9 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
       stats.best = Math.max(stats.best, score);
       stats.worst = Math.min(stats.worst, score);
       recommendationWinners.forEach((winnerName, pairKey) => {
-        const outcome = recommendationByPair.get(pairKey)?.outcomes[winnerName];
+        const recommendation = recommendationByPair.get(pairKey);
+        if (!recommendation?.requiredPrefix.every(required => pathWinners.get(required.pairKey) === required.winner)) return;
+        const outcome = recommendation.outcomes[winnerName];
         if (!outcome) return;
         outcome.total += 1;
         if (passed) outcome.passing += 1;
@@ -261,7 +270,9 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
       const fixedResult = fixedByPair.get(pairKey);
       if (fixedResult && fixedResult.roundIndex !== roundIndex) return;
       const fixedWinner = fixedResult?.winner;
-      const candidates = fixedWinner ? [fixedWinner] : [a.team.name, b.team.name];
+      const candidates = fixedWinner
+        ? [fixedWinner]
+        : [a.team.name, b.team.name].sort((left, right) => Number(right === preferredByPair.get(pairKey)) - Number(left === preferredByPair.get(pairKey)));
       for (const winnerName of candidates) {
         const winner = records.get(winnerName);
         const loser = winnerName === a.team.name ? b : a;
@@ -270,11 +281,13 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
         a.opponents.push(b.team.name);
         b.opponents.push(a.team.name);
         played.add(pairKey);
+        pathWinners.set(pairKey, winnerName);
         if (fixedWinner) usedFixed.add(pairKey);
         if (recommendationByPair.has(pairKey)) recommendationWinners.set(pairKey, winnerName);
         await playMatch(matchIndex + 1);
         if (recommendationByPair.has(pairKey)) recommendationWinners.delete(pairKey);
         if (fixedWinner) usedFixed.delete(pairKey);
+        pathWinners.delete(pairKey);
         played.delete(pairKey);
         a.opponents.pop();
         b.opponents.pop();
@@ -288,7 +301,10 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
 
   await playRound(0);
   if (!stats.total) stats.worst = 0;
-  return { ...stats, recommendations: [...recommendationByPair.values()] };
+  return {
+    ...stats,
+    recommendations: [...recommendationByPair.values()].map(({ requiredPrefix, ...recommendation }) => recommendation),
+  };
 }
 
 function createBracket(teams) {
@@ -687,6 +703,7 @@ function App() {
     const id = `swiss:${stageIndex}:${roundIndex}:${matchIndex}`;
     if (finishedMatches.has(id) && !event.ctrlKey) return;
     if (event.ctrlKey) toggleFinished(id);
+    setPredictionAnalysis(current => current.map((value, index) => index === stageIndex ? null : value));
     setStagePicks(current => current.map((picks, index) => {
       if (index < stageIndex) return picks;
       if (index > stageIndex) return {};
