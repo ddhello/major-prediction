@@ -6,6 +6,12 @@
   "observability": {
     "enabled": true
   },
+  "kv_namespaces": [
+    {
+      "binding": "MAJOR_STATE",
+      "id": "9d8bbeba8d0645d78c3a98c8cc016193"
+    }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

@@ -109,6 +109,39 @@ main { max-width: 1800px; margin: auto; }
 .secondary-action { color: var(--muted); border: 1px solid #34373e; background: transparent; }
 .primary-action { color: #0b0c0f; border: 1px solid var(--acid); background: var(--acid); }
 .primary-action:disabled { opacity: .35; cursor: not-allowed; }
+.secondary-action:disabled { opacity: .35; cursor: not-allowed; }
+.prediction-open-btn { color: #25e9ff; border-color: rgba(37,233,255,.35); background: rgba(37,233,255,.05); }
+.prediction-open-btn:hover { border-color: #25e9ff; background: rgba(37,233,255,.1); }
+.prediction-panel {
+  width: min(1120px, 100%); max-height: calc(100vh - 56px); overflow: hidden; display: flex; flex-direction: column;
+  border: 1px solid #3b3e45; background: #101116; box-shadow: 0 24px 80px rgba(0,0,0,.55);
+}
+.prediction-panel > header { padding: 22px 26px; display: flex; justify-content: space-between; border-bottom: 1px solid var(--line); }
+.prediction-panel > header span { color: #25e9ff; font: 8px "IBM Plex Mono"; letter-spacing: .18em; }
+.prediction-panel > header h2 { margin: 6px 0 4px; font: 25px "Archivo Black"; }
+.prediction-panel > header p { margin: 0; color: var(--muted); font-size: 10px; }
+.prediction-workspace { min-height: 0; padding: 20px 26px; display: grid; grid-template-columns: 1fr 1.45fr; gap: 18px; overflow-y: auto; }
+.prediction-pool, .prediction-drop { border: 1px solid var(--line); background: #0c0d11; }
+.prediction-pool > header, .prediction-drop > header { min-height: 38px; padding: 9px 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); font: 8px "IBM Plex Mono"; letter-spacing: .08em; }
+.prediction-pool > header small { color: var(--muted); }
+.prediction-pool > div { padding: 13px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+.prediction-pool button, .prediction-drop button { padding: 3px; border: 1px solid transparent; background: #12141a; cursor: grab; }
+.prediction-pool button:hover, .prediction-drop button:hover { border-color: #555a64; }
+.prediction-pool .team-mark { width: 52px; height: 52px; margin: auto; }
+.prediction-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.prediction-drop { min-height: 132px; }
+.prediction-drop.qualified { border-color: rgba(37,233,255,.55); box-shadow: inset 0 0 20px rgba(37,233,255,.035); }
+.prediction-drop.eliminated { border-color: rgba(255,60,101,.65); box-shadow: inset 0 0 20px rgba(255,60,101,.04); }
+.prediction-drop.qualified > header { color: #25e9ff; background: rgba(37,233,255,.06); }
+.prediction-drop.eliminated > header { color: #ff3c65; background: rgba(255,60,101,.06); }
+.prediction-drop > div { min-height: 88px; padding: 12px; display: flex; align-items: center; gap: 12px; }
+.prediction-drop .team-mark { width: 58px; height: 58px; }
+.prediction-analysis { margin: 0 26px 18px; padding: 14px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; border: 1px solid var(--line); background: var(--line); }
+.prediction-analysis div { padding: 11px; background: #0c0d11; }
+.prediction-analysis span, .prediction-analysis strong { display: block; }
+.prediction-analysis span { color: var(--muted); font: 8px "IBM Plex Mono"; letter-spacing: .08em; }
+.prediction-analysis strong { margin-top: 7px; color: #25e9ff; font: 17px "Archivo Black"; }
+.prediction-analysis p { grid-column: 1 / -1; margin: 8px 2px 0; color: #d2a963; font: 8px/1.6 "IBM Plex Mono"; }
 .admin-panel { width: min(520px, 100%); padding: 28px; border: 1px solid #3b3e45; background: #101116; box-shadow: 0 24px 80px rgba(0,0,0,.55); }
 .admin-panel > header { display: flex; justify-content: space-between; gap: 20px; }
 .admin-panel > header span { color: var(--acid); font: 8px "IBM Plex Mono"; letter-spacing: .18em; }
@@ -278,6 +311,10 @@ footer { padding: 22px 4vw; display: flex; justify-content: space-between; color
   .editor-team > div { grid-template-columns: 1fr 74px; }
   .editor-actions { padding: 12px 14px; flex-wrap: wrap; }
   .editor-actions span { flex-basis: 100%; }
+  .prediction-panel { max-height: calc(100vh - 20px); }
+  .prediction-workspace { padding: 14px; grid-template-columns: 1fr; }
+  .prediction-analysis { margin-inline: 14px; grid-template-columns: 1fr; }
+  .prediction-groups { grid-template-columns: 1fr; }
   .swiss-scroll { padding-inline: 20px; }
   .bracket { min-width: 1380px; }
   .playoff-bracket { min-width: 1000px; }
