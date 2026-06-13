@@ -191,12 +191,12 @@ function TeamMark({ team, small = false }) {
   );
 }
 
-function SwissMatch({ match, onPick }) {
+function SwissMatch({ match, onPick, finished }) {
   return (
-    <article className={`swiss-match ${match.winner ? "decided" : ""}`}>
-      <button className={`swiss-team ${match.winner?.name === match.a.name ? "selected" : ""} ${match.winner?.name === match.b.name ? "dimmed" : ""}`} onClick={() => onPick(match.roundIndex, match.matchIndex, match.a)}><TeamMark team={match.a} small /></button>
+    <article className={`swiss-match ${match.winner ? "decided" : ""} ${finished ? "finished" : ""}`}>
+      <button className={`swiss-team ${match.winner?.name === match.a.name ? "selected" : ""} ${match.winner?.name === match.b.name ? "dimmed" : ""}`} onClick={event => onPick(match.roundIndex, match.matchIndex, match.a, event)}><TeamMark team={match.a} small /></button>
       <div className="record-label">{match.record}</div>
-      <button className={`swiss-team ${match.winner?.name === match.b.name ? "selected" : ""} ${match.winner?.name === match.a.name ? "dimmed" : ""}`} onClick={() => onPick(match.roundIndex, match.matchIndex, match.b)}><TeamMark team={match.b} small /></button>
+      <button className={`swiss-team ${match.winner?.name === match.b.name ? "selected" : ""} ${match.winner?.name === match.a.name ? "dimmed" : ""}`} onClick={event => onPick(match.roundIndex, match.matchIndex, match.b, event)}><TeamMark team={match.b} small /></button>
     </article>
   );
 }
@@ -271,7 +271,7 @@ function AdminPanel({ status, onPublish, onClose }) {
   return (
     <div className="editor-backdrop" onClick={onClose}>
       <section className="admin-panel" onClick={event => event.stopPropagation()}>
-        <header><div><span>ADMIN PUBLISH</span><h2>发布网站默认状态</h2><p>其他访客进入网站时将自动同步你当前的队伍和比赛选择。</p></div><button className="editor-close" onClick={onClose}>×</button></header>
+        <header><div><span>ADMIN PUBLISH</span><h2>发布比赛状态</h2><p>Ctrl + 左键点击比赛可标记为已结束。访客只会强制同步已结束比赛，其他预测保留本地记录。</p></div><button className="editor-close" onClick={onClose}>×</button></header>
         <label>管理员 Token<input type="password" value={token} onChange={event => setToken(event.target.value)} placeholder="Cloudflare ADMIN_TOKEN" /></label>
         <div className={`admin-status ${status.type}`}>{status.message}</div>
         <button className="primary-action" disabled={!token || status.type === "loading"} onClick={publish}>{status.type === "loading" ? "正在发布..." : "发布为网站默认状态"}</button>
@@ -295,7 +295,7 @@ function DataPanel({ status, onExport, onImport, onClose }) {
   );
 }
 
-function SwissStage({ number, simulation, onPick, locked, onNavigate, onEditTeams }) {
+function SwissStage({ number, simulation, onPick, locked, onNavigate, onEditTeams, finishedMatches }) {
   if (locked) {
     return (
       <section className="locked-panel">
@@ -322,7 +322,7 @@ function SwissStage({ number, simulation, onPick, locked, onNavigate, onEditTeam
               <div className="swiss-round-content">
                 {roundIndex === 3 && <ResultGroup title="晋级" teams={simulation.outcomeGroups["3:0"]} tone="qualified" record="3:0" />}
                 {roundIndex === 4 && <ResultGroup title="晋级" teams={simulation.outcomeGroups["3:1"]} tone="qualified" record="3:1" />}
-                <div className="round-matches">{round.map(match => <SwissMatch key={match.matchIndex} match={match} onPick={onPick} />)}</div>
+                <div className="round-matches">{round.map(match => <SwissMatch key={match.matchIndex} match={match} onPick={onPick} finished={finishedMatches.has(`swiss:${number - 1}:${match.roundIndex}:${match.matchIndex}`)} />)}</div>
                 {roundIndex === 3 && <ResultGroup title="淘汰" teams={simulation.outcomeGroups["0:3"]} tone="eliminated" record="0:3" />}
                 {roundIndex === 4 && <ResultGroup title="淘汰" teams={simulation.outcomeGroups["1:3"]} tone="eliminated" record="1:3" />}
               </div>
@@ -342,26 +342,26 @@ function SwissStage({ number, simulation, onPick, locked, onNavigate, onEditTeam
   );
 }
 
-function PlayoffMatch({ match, roundIndex, matchIndex, onPick }) {
+function PlayoffMatch({ match, roundIndex, matchIndex, onPick, finished }) {
   return (
-    <article className="match-card">
+    <article className={`match-card ${finished ? "finished" : ""}`}>
       <div className="match-topline"><span>MATCH {matchIndex + 1}</span><span>BO3</span></div>
       {[match.a, match.b].map((team, index) => {
         const selected = match.winner?.name === team?.name;
-        return <button disabled={!match.a || !match.b} key={team?.name ?? index} className={`team-row ${selected ? "selected" : ""} ${match.winner && !selected ? "dimmed" : ""}`} onClick={() => onPick(roundIndex, matchIndex, team)}><TeamMark team={team} small /><span className="team-name">{team?.name ?? "等待胜者"}</span><span className="pick-indicator">{selected ? "✓" : "选择"}</span></button>;
+        return <button disabled={!match.a || !match.b} key={team?.name ?? index} className={`team-row ${selected ? "selected" : ""} ${match.winner && !selected ? "dimmed" : ""}`} onClick={event => onPick(roundIndex, matchIndex, team, event)}><TeamMark team={team} small /><span className="team-name">{team?.name ?? "等待胜者"}</span><span className="pick-indicator">{selected ? "✓" : "选择"}</span></button>;
       })}
     </article>
   );
 }
 
-function Champions({ rounds, onPick, locked, onNavigate }) {
+function Champions({ rounds, onPick, locked, onNavigate, finishedMatches }) {
   if (locked) return <section className="locked-panel"><span>CHAMPIONS STAGE LOCKED</span><h2>先完成 Stage 3</h2><p>Stage 3 的 8 支晋级队伍将进入淘汰赛。</p><button onClick={() => onNavigate(2)}>返回 Stage 3</button></section>;
   const champion = rounds[2][0].winner;
   return (
     <>
       <section className="stage-intro"><div><span>COLOGNE 2026 · PLAYOFFS</span><h1>冠军之路，<em>最后七场</em></h1><p>保留原有淘汰赛，Stage 3 的晋级队伍已经自动进入八强。</p></div></section>
       <section className="bracket-scroll"><div className="bracket playoff-bracket">
-        {rounds.map((round, roundIndex) => <section className={`stage stage-${roundIndex}`} key={roundIndex}><header className="stage-header"><span>{["QUARTERFINALS", "SEMIFINALS", "GRAND FINAL"][roundIndex]}</span><h2>{["四分之一决赛", "半决赛", "总决赛"][roundIndex]}</h2></header><div className="match-list">{round.map((match, matchIndex) => <PlayoffMatch key={matchIndex} match={match} roundIndex={roundIndex} matchIndex={matchIndex} onPick={onPick} />)}</div></section>)}
+        {rounds.map((round, roundIndex) => <section className={`stage stage-${roundIndex}`} key={roundIndex}><header className="stage-header"><span>{["QUARTERFINALS", "SEMIFINALS", "GRAND FINAL"][roundIndex]}</span><h2>{["四分之一决赛", "半决赛", "总决赛"][roundIndex]}</h2></header><div className="match-list">{round.map((match, matchIndex) => <PlayoffMatch key={matchIndex} match={match} roundIndex={roundIndex} matchIndex={matchIndex} onPick={onPick} finished={finishedMatches.has(`playoff:${roundIndex}:${matchIndex}`)} />)}</div></section>)}
       </div></section>
       <section className={`champion-panel ${champion ? "revealed" : ""}`}><div className="trophy">✦</div><div className="champion-copy"><span>YOUR COLOGNE 2026 CHAMPION</span><h2>{champion?.name ?? "冠军等待你的预测"}</h2><p>{champion ? `你预测 ${champion.name} 将在科隆捧杯。` : "完成淘汰赛，冠军将在这里揭晓。"}</p></div><TeamMark team={champion} /></section>
     </>
@@ -376,6 +376,7 @@ function App() {
   const [stageThreeInvites, setStageThreeInvites] = useState(() => (savedState.stageThreeInvites?.length === 8 ? savedState.stageThreeInvites : defaultStageThreeInvites).map(normalizeTeam));
   const [stagePicks, setStagePicks] = useState(() => savedState.stagePicks?.length === 3 ? savedState.stagePicks : [{}, {}, {}]);
   const [playoffRounds, setPlayoffRounds] = useState(() => savedState.playoffRounds ?? []);
+  const [finishedMatches, setFinishedMatches] = useState(() => new Set(savedState.finishedMatches ?? []));
   const [editorStage, setEditorStage] = useState(null);
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminStatus, setAdminStatus] = useState({ type: "idle", message: "当前全部赛事状态将作为网站默认状态发布。" });
@@ -388,6 +389,25 @@ function App() {
   const stage3Participants = useMemo(() => stage2.complete ? [...stageThreeInvites, ...stage2.seededQualified] : [], [stage2, stageThreeInvites]);
   const stage3 = useMemo(() => deriveSwiss(stage3Participants, stagePicks[2]), [stage3Participants, stagePicks]);
   useEffect(() => {
+    const simulations = [stage1, stage2, stage3];
+    setStagePicks(current => {
+      const cleaned = current.map((picks, stageIndex) => {
+        const validMatches = new Map(simulations[stageIndex].rounds.flatMap(round => round.map(match => [`${match.roundIndex}-${match.matchIndex}`, [match.a.name, match.b.name]])));
+        return Object.fromEntries(Object.entries(picks).filter(([key, winner]) => validMatches.get(key)?.includes(winner)));
+      });
+      return JSON.stringify(cleaned) === JSON.stringify(current) ? current : cleaned;
+    });
+    setFinishedMatches(current => {
+      const valid = new Set([...current].filter(id => {
+        if (!id.startsWith("swiss:")) return true;
+        const [, stage, round, match] = id.split(":");
+        const matchData = simulations[Number(stage)]?.rounds?.[Number(round)]?.[Number(match)];
+        return matchData && stagePicks[Number(stage)]?.[`${round}-${match}`] && [matchData.a.name, matchData.b.name].includes(stagePicks[Number(stage)][`${round}-${match}`]);
+      }));
+      return valid.size === current.size ? current : valid;
+    });
+  }, [stage1, stage2, stage3]);
+  useEffect(() => {
     fetch("/api/state", { cache: "no-store" })
       .then(response => response.ok ? response.json() : Promise.reject())
       .then(({ state }) => {
@@ -395,9 +415,30 @@ function App() {
         if (state.stageOneTeams?.length === 16) setStageOneTeams(state.stageOneTeams.map(normalizeTeam));
         if (state.stageTwoInvites?.length === 8) setStageTwoInvites(state.stageTwoInvites.map(normalizeTeam));
         if (state.stageThreeInvites?.length === 8) setStageThreeInvites(state.stageThreeInvites.map(normalizeTeam));
-        if (state.stagePicks?.length === 3) setStagePicks(state.stagePicks);
-        if (Array.isArray(state.playoffRounds)) setPlayoffRounds(state.playoffRounds);
-        setActivePage(state.activePage ?? 0);
+        const publishedFinished = new Set(state.finishedMatches ?? []);
+        if (state.stagePicks?.length === 3) {
+          setStagePicks(local => local.map((picks, stageIndex) => {
+            const merged = { ...picks };
+            publishedFinished.forEach(id => {
+              const [type, stage, round, match] = id.split(":");
+              if (type === "swiss" && Number(stage) === stageIndex) {
+                const key = `${round}-${match}`;
+                if (state.stagePicks[stageIndex]?.[key]) merged[key] = state.stagePicks[stageIndex][key];
+              }
+            });
+            return merged;
+          }));
+        }
+        if (Array.isArray(state.playoffRounds)) {
+          setPlayoffRounds(local => state.playoffRounds.map((round, roundIndex) => round.map((remoteMatch, matchIndex) => {
+            const id = `playoff:${roundIndex}:${matchIndex}`;
+            const localMatch = local?.[roundIndex]?.[matchIndex];
+            if (publishedFinished.has(id) || !localMatch) return { ...remoteMatch };
+            const sameTeams = localMatch.a?.name === remoteMatch.a?.name && localMatch.b?.name === remoteMatch.b?.name;
+            return sameTeams ? { ...remoteMatch, winner: localMatch.winner } : { ...remoteMatch, winner: null };
+          })));
+        }
+        setFinishedMatches(publishedFinished);
       })
       .catch(() => {})
       .finally(() => setRemoteLoaded(true));
@@ -405,17 +446,27 @@ function App() {
   useEffect(() => {
     if (!remoteLoaded) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ activePage, stageOneTeams, stageTwoInvites, stageThreeInvites, stagePicks, playoffRounds }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ activePage, stageOneTeams, stageTwoInvites, stageThreeInvites, stagePicks, playoffRounds, finishedMatches: [...finishedMatches] }));
     } catch {
       // Large uploaded icons can exceed the browser storage quota.
     }
-  }, [activePage, stageOneTeams, stageTwoInvites, stageThreeInvites, stagePicks, playoffRounds, remoteLoaded]);
+  }, [activePage, stageOneTeams, stageTwoInvites, stageThreeInvites, stagePicks, playoffRounds, finishedMatches, remoteLoaded]);
 
   function navigate(page) {
     if (page === 3 && stage3.complete && !playoffRounds.length) setPlayoffRounds(createBracket(stage3.qualified));
     setActivePage(page);
   }
-  function pickSwiss(stageIndex, roundIndex, matchIndex, team) {
+  function toggleFinished(id) {
+    setFinishedMatches(current => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function pickSwiss(stageIndex, roundIndex, matchIndex, team, event) {
+    const id = `swiss:${stageIndex}:${roundIndex}:${matchIndex}`;
+    if (finishedMatches.has(id) && !event.ctrlKey) return;
+    if (event.ctrlKey) toggleFinished(id);
     setStagePicks(current => current.map((picks, index) => {
       if (index < stageIndex) return picks;
       if (index > stageIndex) return {};
@@ -427,7 +478,10 @@ function App() {
     }));
     setPlayoffRounds([]);
   }
-  function pickPlayoff(roundIndex, matchIndex, team) {
+  function pickPlayoff(roundIndex, matchIndex, team, event) {
+    const id = `playoff:${roundIndex}:${matchIndex}`;
+    if (finishedMatches.has(id) && !event.ctrlKey) return;
+    if (event.ctrlKey) toggleFinished(id);
     setPlayoffRounds(current => {
       const next = current.map(round => round.map(match => ({ ...match })));
       next[roundIndex][matchIndex].winner = team;
@@ -439,11 +493,12 @@ function App() {
       return next;
     });
   }
-  function reset() { setStagePicks([{}, {}, {}]); setPlayoffRounds([]); setActivePage(0); }
+  function reset() { setStagePicks([{}, {}, {}]); setPlayoffRounds([]); setFinishedMatches(new Set()); setActivePage(0); }
   function saveStageOneTeams(teams) {
     setStageOneTeams(teams);
     setStagePicks([{}, {}, {}]);
     setPlayoffRounds([]);
+    setFinishedMatches(new Set());
     setActivePage(0);
     setEditorStage(null);
   }
@@ -451,6 +506,7 @@ function App() {
     setStageTwoInvites(teams);
     setStagePicks(current => [current[0], {}, {}]);
     setPlayoffRounds([]);
+    setFinishedMatches(current => new Set([...current].filter(id => id.startsWith("swiss:0:"))));
     setActivePage(1);
     setEditorStage(null);
   }
@@ -458,6 +514,7 @@ function App() {
     setStageThreeInvites(teams);
     setStagePicks(current => [current[0], current[1], {}]);
     setPlayoffRounds([]);
+    setFinishedMatches(current => new Set([...current].filter(id => id.startsWith("swiss:0:") || id.startsWith("swiss:1:"))));
     setActivePage(2);
     setEditorStage(null);
   }
@@ -467,7 +524,7 @@ function App() {
       const response = await fetch("/api/state", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ activePage, stageOneTeams, stageTwoInvites, stageThreeInvites, stagePicks, playoffRounds }),
+        body: JSON.stringify({ activePage, stageOneTeams, stageTwoInvites, stageThreeInvites, stagePicks, playoffRounds, finishedMatches: [...finishedMatches] }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "发布失败。");
@@ -477,7 +534,7 @@ function App() {
     }
   }
   function currentState() {
-    return { version: 1, exportedAt: new Date().toISOString(), activePage, stageOneTeams, stageTwoInvites, stageThreeInvites, stagePicks, playoffRounds };
+    return { version: 2, exportedAt: new Date().toISOString(), activePage, stageOneTeams, stageTwoInvites, stageThreeInvites, stagePicks, playoffRounds, finishedMatches: [...finishedMatches] };
   }
   function exportState() {
     const blob = new Blob([JSON.stringify(currentState(), null, 2)], { type: "application/json" });
@@ -501,6 +558,7 @@ function App() {
       setStageThreeInvites(state.stageThreeInvites.map(normalizeTeam));
       setStagePicks(state.stagePicks);
       setPlayoffRounds(state.playoffRounds);
+      setFinishedMatches(new Set(state.finishedMatches ?? []));
       setActivePage(Number.isInteger(state.activePage) ? Math.min(3, Math.max(0, state.activePage)) : 0);
       setDataStatus({ type: "success", message: `导入成功：${file.name}` });
     } catch (error) {
@@ -514,7 +572,7 @@ function App() {
       <header className="site-header"><a className="brand" href="#" onClick={event => { event.preventDefault(); navigate(0); }}><span className="brand-icon">M</span><span><strong>MAJOR</strong><small>SIMULATOR</small></span></a><div className="event-pill"><span className="live-dot" /> COLOGNE 2026</div><div className="header-actions"><button className="admin-btn" onClick={() => setDataOpen(true)}>导入 / 导出</button><button className="admin-btn" onClick={() => setAdminOpen(true)}>管理员发布</button><button className="reset-btn" onClick={reset}>重新开始 ↺</button></div></header>
       <main>
         <nav className="stage-nav">{navItems.map(item => <button key={item.id} className={activePage === item.id ? "active" : ""} onClick={() => navigate(item.id)}><span>{item.icon}</span>{item.label}{item.id > 0 && !simulations[item.id - 1]?.complete && <i>LOCKED</i>}</button>)}</nav>
-        {activePage < 3 ? <SwissStage number={activePage + 1} simulation={simulations[activePage]} locked={activePage > 0 && !simulations[activePage - 1].complete} onPick={(r, m, team) => pickSwiss(activePage, r, m, team)} onNavigate={navigate} onEditTeams={() => setEditorStage(activePage + 1)} /> : <Champions rounds={playoffRounds} onPick={pickPlayoff} locked={!stage3.complete} onNavigate={navigate} />}
+        {activePage < 3 ? <SwissStage number={activePage + 1} simulation={simulations[activePage]} locked={activePage > 0 && !simulations[activePage - 1].complete} onPick={(r, m, team, event) => pickSwiss(activePage, r, m, team, event)} onNavigate={navigate} onEditTeams={() => setEditorStage(activePage + 1)} finishedMatches={finishedMatches} /> : <Champions rounds={playoffRounds} onPick={pickPlayoff} locked={!stage3.complete} onNavigate={navigate} finishedMatches={finishedMatches} />}
       </main>
       <footer><span>MAJOR SIMULATOR / 2026</span><span>三胜晋级 · 三负淘汰 · 最终进入淘汰赛</span></footer>
       {editorStage === 1 && <TeamEditor teams={stageOneTeams} defaults={defaultStageOneTeams} stageNumber={1} onSave={saveStageOneTeams} onClose={() => setEditorStage(null)} />}

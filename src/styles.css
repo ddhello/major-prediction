@@ -146,6 +146,14 @@ main { max-width: 1800px; margin: auto; }
 .swiss-round-content > .result-group { width: 100%; margin: 0; }
 .swiss-match { position: relative; overflow: hidden; height: 62px; display: grid; grid-template-columns: 1fr 48px 1fr; border: 1px solid var(--line); border-radius: 3px; background: #101218; }
 .swiss-match.decided { border-color: rgba(200,255,40,.24); }
+.swiss-match.finished, .match-card.finished {
+  border-color: #2f9dff;
+  box-shadow: 0 0 8px rgba(47,157,255,.8), 0 0 22px rgba(47,157,255,.38);
+}
+.swiss-match.finished::after, .match-card.finished::after {
+  content: "FINAL"; position: absolute; z-index: 4; right: 4px; top: 3px; color: #70baff;
+  font: 600 5px "IBM Plex Mono"; letter-spacing: .08em; pointer-events: none;
+}
 .record-label {
   z-index: 2; display: grid; place-items: center; color: #8b91a0; border-inline: 1px solid #242731;
   background: #0d0f15; font: 600 10px "IBM Plex Mono";
