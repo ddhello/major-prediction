@@ -18,11 +18,25 @@ const defaultStageOneTeams = [
 const STORAGE_KEY = "major-simulator-state-v2";
 const predictionGroups = [
   { key: "3:0", label: "3:0 晋级", limit: 2, tone: "qualified" },
-  { key: "3:1", label: "3:1 晋级", limit: 3, tone: "qualified" },
-  { key: "3:2", label: "3:2 晋级", limit: 3, tone: "qualified" },
+  { key: "advance", label: "晋级", limit: 6, tone: "qualified" },
   { key: "0:3", label: "0:3 淘汰", limit: 2, tone: "eliminated" },
 ];
 const emptyPrediction = () => Object.fromEntries(predictionGroups.map(group => [group.key, []]));
+
+function normalizePrediction(prediction = {}) {
+  const threeZero = [...new Set(prediction["3:0"] ?? [])].slice(0, 2);
+  const advance = [...new Set(prediction.advance ?? [...(prediction["3:1"] ?? []), ...(prediction["3:2"] ?? [])])]
+    .filter(name => !threeZero.includes(name)).slice(0, 6);
+  return {
+    "3:0": threeZero,
+    advance,
+    "0:3": [...new Set(prediction["0:3"] ?? [])].filter(name => !threeZero.includes(name) && !advance.includes(name)).slice(0, 2),
+  };
+}
+
+function normalizePredictions(predictions) {
+  return Array.from({ length: 3 }, (_, index) => normalizePrediction(predictions?.[index]));
+}
 
 function readSavedState() {
   try {
@@ -172,10 +186,10 @@ function deriveSwiss(participants, picks) {
 }
 
 function predictionScore(records, prediction) {
-  const finalByName = new Map(records.map(record => [record.team.name, `${record.wins}:${record.losses}`]));
-  return predictionGroups.reduce((score, group) =>
-    score + (prediction[group.key] ?? []).filter(name => finalByName.get(name) === group.key).length, 0
-  );
+  const finalByName = new Map(records.map(record => [record.team.name, record]));
+  return (prediction["3:0"] ?? []).filter(name => finalByName.get(name)?.wins === 3 && finalByName.get(name)?.losses === 0).length
+    + (prediction.advance ?? []).filter(name => finalByName.get(name)?.wins === 3).length
+    + (prediction["0:3"] ?? []).filter(name => finalByName.get(name)?.wins === 0 && finalByName.get(name)?.losses === 3).length;
 }
 
 async function analyzeSwissPossibilities(participants, simulation, finishedMatches, stageIndex, prediction, onProgress) {
@@ -198,7 +212,7 @@ async function analyzeSwissPossibilities(participants, simulation, finishedMatch
       if (usedFixed.size !== fixedByPair.size) return;
       const score = predictionScore([...records.values()], prediction);
       stats.total += 1;
-      if (score > 5) stats.passing += 1;
+      if (score >= 5) stats.passing += 1;
       stats.best = Math.max(stats.best, score);
       stats.worst = Math.min(stats.worst, score);
       stats.explored += 1;
@@ -382,9 +396,10 @@ function DataPanel({ status, onExport, onImport, onClose }) {
 
 function PredictionPanel({ stageNumber, teams, value, onSave, onAnalyze, analysis, onClose }) {
   const teamNames = new Set(teams.map(team => team.name));
+  const normalizedValue = normalizePrediction(value);
   const [draft, setDraft] = useState(() => Object.fromEntries(predictionGroups.map(group => [
     group.key,
-    (value[group.key] ?? []).filter(name => teamNames.has(name)).slice(0, group.limit),
+    (normalizedValue[group.key] ?? []).filter(name => teamNames.has(name)).slice(0, group.limit),
   ])));
   const assigned = new Set(Object.values(draft).flat());
 
@@ -409,7 +424,7 @@ function PredictionPanel({ stageNumber, teams, value, onSave, onAnalyze, analysi
     <div className="editor-backdrop" onClick={onClose}>
       <section className="prediction-panel" onClick={event => event.stopPropagation()}>
         <header>
-          <div><span>STAGE {stageNumber} PICK'EM</span><h2>选择十支队伍</h2><p>拖动队标到比分区域。命中 6 支或更多即通过。</p></div>
+          <div><span>STAGE {stageNumber} PICK'EM</span><h2>选择十支队伍</h2><p>拖动队标到比分区域。中间六支只需晋级，不区分 3:1 或 3:2；命中至少 5 支即通过。</p></div>
           <button className="editor-close" onClick={onClose}>×</button>
         </header>
         <div className="prediction-workspace">
@@ -419,7 +434,7 @@ function PredictionPanel({ stageNumber, teams, value, onSave, onAnalyze, analysi
           </section>
           <div className="prediction-groups">
             {predictionGroups.map(group => (
-              <section className={`prediction-drop ${group.tone}`} key={group.key} onDragOver={event => event.preventDefault()} onDrop={event => drop(event, group.key)}>
+              <section className={`prediction-drop ${group.tone} ${group.key}`} key={group.key} onDragOver={event => event.preventDefault()} onDrop={event => drop(event, group.key)}>
                 <header><strong>{group.label}</strong><span>{(draft[group.key] ?? []).length} / {group.limit}</span></header>
                 <div>{(draft[group.key] ?? []).map(name => {
                   const team = teams.find(item => item.name === name);
@@ -437,7 +452,7 @@ function PredictionPanel({ stageNumber, teams, value, onSave, onAnalyze, analysi
           {analysis?.truncated && <p>未结束比赛过多，已达到 2,000,000 种安全上限；当前数字为已验证下界。</p>}
         </section>
         <footer className="editor-actions">
-          <span>{complete ? "选择完整，可以保存并分析。" : "请填满 3:0、3:1、3:2 和 0:3 的所有位置。"}</span>
+          <span>{complete ? "选择完整，可以保存并分析。" : "请填满 3:0、晋级和 0:3 的所有位置。"}</span>
           <button className="secondary-action" onClick={() => setDraft(emptyPrediction())}>清空</button>
           <button className="secondary-action" disabled={!complete || analysis?.running} onClick={() => onAnalyze(draft)}>遍历可能性</button>
           <button className="primary-action" disabled={!complete} onClick={() => onSave(draft)}>保存选择</button>
@@ -509,7 +524,8 @@ function PlayoffMatch({ match, roundIndex, matchIndex, onPick, finished }) {
 
 function Champions({ rounds, onPick, locked, onNavigate, finishedMatches }) {
   if (locked) return <section className="locked-panel"><span>CHAMPIONS STAGE LOCKED</span><h2>先完成 Stage 3</h2><p>Stage 3 的 8 支晋级队伍将进入淘汰赛。</p><button onClick={() => onNavigate(2)}>返回 Stage 3</button></section>;
-  const champion = rounds[2][0].winner;
+  if (!rounds?.[0]?.length) return <section className="locked-panel"><span>GENERATING PLAYOFFS</span><h2>正在生成淘汰赛</h2><p>淘汰赛对阵将在 Stage 3 完成后自动生成。</p><button onClick={() => onNavigate(2)}>返回 Stage 3</button></section>;
+  const champion = rounds?.[2]?.[0]?.winner;
   return (
     <>
       <section className="stage-intro"><div><span>COLOGNE 2026 · PLAYOFFS</span><h1>冠军之路，<em>最后七场</em></h1><p>保留原有淘汰赛，Stage 3 的晋级队伍已经自动进入八强。</p></div></section>
@@ -523,14 +539,14 @@ function Champions({ rounds, onPick, locked, onNavigate, finishedMatches }) {
 
 function App() {
   const savedState = useMemo(readSavedState, []);
-  const [activePage, setActivePage] = useState(savedState.activePage ?? 0);
+  const [activePage, setActivePage] = useState(() => Number.isInteger(savedState.activePage) ? Math.min(3, Math.max(0, savedState.activePage)) : 0);
   const [stageOneTeams, setStageOneTeams] = useState(() => (savedState.stageOneTeams?.length === 16 ? savedState.stageOneTeams : defaultStageOneTeams).map(normalizeTeam));
   const [stageTwoInvites, setStageTwoInvites] = useState(() => migrateStageTwoInvites(savedState.stageTwoInvites?.length === 8 ? savedState.stageTwoInvites : defaultStageTwoInvites));
   const [stageThreeInvites, setStageThreeInvites] = useState(() => (savedState.stageThreeInvites?.length === 8 ? savedState.stageThreeInvites : defaultStageThreeInvites).map(normalizeTeam));
   const [stagePicks, setStagePicks] = useState(() => savedState.stagePicks?.length === 3 ? savedState.stagePicks : [{}, {}, {}]);
   const [playoffRounds, setPlayoffRounds] = useState(() => savedState.playoffRounds ?? []);
   const [finishedMatches, setFinishedMatches] = useState(() => new Set(savedState.finishedMatches ?? []));
-  const [outcomePredictions, setOutcomePredictions] = useState(() => savedState.outcomePredictions?.length === 3 ? savedState.outcomePredictions : [emptyPrediction(), emptyPrediction(), emptyPrediction()]);
+  const [outcomePredictions, setOutcomePredictions] = useState(() => normalizePredictions(savedState.outcomePredictions));
   const [predictionStage, setPredictionStage] = useState(null);
   const [predictionAnalysis, setPredictionAnalysis] = useState([null, null, null]);
   const [editorStage, setEditorStage] = useState(null);
@@ -545,6 +561,9 @@ function App() {
   const stage3Participants = useMemo(() => stage2.complete ? [...stageThreeInvites, ...stage2.seededQualified] : [], [stage2, stageThreeInvites]);
   const stage3 = useMemo(() => deriveSwiss(stage3Participants, stagePicks[2]), [stage3Participants, stagePicks]);
   const stageParticipants = [toSeedOrderFromFirstRound(stageOneTeams), stage2Participants, stage3Participants];
+  useEffect(() => {
+    if (activePage === 3 && stage3.complete && !playoffRounds.length) setPlayoffRounds(createBracket(stage3.qualified));
+  }, [activePage, stage3, playoffRounds.length]);
   useEffect(() => {
     const simulations = [stage1, stage2, stage3];
     setStagePicks(current => {
@@ -723,7 +742,7 @@ function App() {
       setStagePicks(state.stagePicks);
       setPlayoffRounds(state.playoffRounds);
       setFinishedMatches(new Set(state.finishedMatches ?? []));
-      if (state.outcomePredictions?.length === 3) setOutcomePredictions(state.outcomePredictions);
+      if (state.outcomePredictions?.length === 3) setOutcomePredictions(normalizePredictions(state.outcomePredictions));
       setActivePage(Number.isInteger(state.activePage) ? Math.min(3, Math.max(0, state.activePage)) : 0);
       setDataStatus({ type: "success", message: `导入成功：${file.name}` });
     } catch (error) {
@@ -732,7 +751,7 @@ function App() {
   }
 
   function saveOutcomePrediction(stageIndex, prediction) {
-    setOutcomePredictions(current => current.map((value, index) => index === stageIndex ? prediction : value));
+    setOutcomePredictions(current => current.map((value, index) => index === stageIndex ? normalizePrediction(prediction) : value));
     setPredictionAnalysis(current => current.map((value, index) => index === stageIndex ? null : value));
   }
 

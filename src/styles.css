@@ -129,6 +129,8 @@ main { max-width: 1800px; margin: auto; }
 .prediction-pool button:hover, .prediction-drop button:hover { border-color: #555a64; }
 .prediction-pool .team-mark { width: 52px; height: 52px; margin: auto; }
 .prediction-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.prediction-drop.advance { grid-row: span 2; }
+.prediction-drop.advance > div { align-content: center; flex-wrap: wrap; }
 .prediction-drop { min-height: 132px; }
 .prediction-drop.qualified { border-color: rgba(37,233,255,.55); box-shadow: inset 0 0 20px rgba(37,233,255,.035); }
 .prediction-drop.eliminated { border-color: rgba(255,60,101,.65); box-shadow: inset 0 0 20px rgba(255,60,101,.04); }
