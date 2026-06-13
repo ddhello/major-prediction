@@ -1,8 +1,21 @@
-import { StrictMode, useEffect, useMemo, useRef, useState } from "react";
+import { memo, StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
-const LOGO_BASE_URL = "https://img.majors.im/logos/2606_cs2_cologne";
+const LOGO_BASE_URL = "/logos";
+const preloadedLogos = new Map();
+const logoUrl = team => `${LOGO_BASE_URL}/${encodeURIComponent(team.imageName || team.short.toLowerCase())}.png`;
+
+function preloadTeamLogos(teams) {
+  teams.forEach(team => {
+    const icon = logoUrl(team);
+    if (preloadedLogos.has(icon)) return;
+    const image = new Image();
+    image.decoding = "async";
+    image.src = icon;
+    preloadedLogos.set(icon, image);
+  });
+}
 const makeTeam = (name, short, color, imageName = short.toLowerCase()) => ({ name, short, color, imageName });
 const normalizeTeam = team => ({ ...team, imageName: team.imageName || team.short.toLowerCase() });
 const defaultStageOneTeams = [
@@ -326,15 +339,20 @@ function createBracket(teams) {
   return rounds;
 }
 
-function TeamMark({ team, small = false }) {
+const TeamMark = memo(function TeamMark({ team, small = false }) {
   if (!team) return <span className={`team-mark empty-mark ${small ? "small" : ""}`}>?</span>;
-  const icon = `${LOGO_BASE_URL}/${encodeURIComponent(team.imageName || team.short.toLowerCase())}.png`;
+  const icon = logoUrl(team);
   return (
     <span className={`team-mark ${small ? "small" : ""}`} title={team.name}>
-      <img key={icon} src={icon} alt={`${team.name} icon`} onError={event => { event.currentTarget.hidden = true; }} />
+      <img src={icon} alt={`${team.name} icon`} decoding="async" onError={event => { event.currentTarget.hidden = true; }} />
     </span>
   );
-}
+}, (previous, next) =>
+  previous.small === next.small
+  && previous.team?.name === next.team?.name
+  && previous.team?.imageName === next.team?.imageName
+  && previous.team?.short === next.team?.short
+);
 
 function SwissMatch({ match, onPick, finished, recommended }) {
   const teamButton = team => (
@@ -623,6 +641,9 @@ function App() {
   const stage3Participants = useMemo(() => stage2.complete ? [...stageThreeInvites, ...stage2.seededQualified] : [], [stage2, stageThreeInvites]);
   const stage3 = useMemo(() => deriveSwiss(stage3Participants, stagePicks[2]), [stage3Participants, stagePicks]);
   const stageParticipants = [toSeedOrderFromFirstRound(stageOneTeams), stage2Participants, stage3Participants];
+  useEffect(() => {
+    preloadTeamLogos([...stageOneTeams, ...stageTwoInvites, ...stageThreeInvites]);
+  }, [stageOneTeams, stageTwoInvites, stageThreeInvites]);
   useEffect(() => {
     if (activePage === 3 && stage3.complete && !playoffRounds.length) setPlayoffRounds(createBracket(stage3.qualified));
   }, [activePage, stage3, playoffRounds.length]);
