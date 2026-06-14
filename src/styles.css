@@ -209,8 +209,20 @@ main { max-width: 1800px; margin: auto; }
   font-size: 11px; line-height: 1; text-shadow: 0 0 5px rgba(200,255,40,.9), 0 0 12px rgba(200,255,40,.55);
 }
 .results-column { min-height: 600px; }
+.pickem-score-card {
+  padding: 15px 14px; border: 1px solid currentColor; background: rgba(37,233,255,.045);
+  box-shadow: 0 0 20px rgba(37,233,255,.12);
+}
+.pickem-score-card > span, .pickem-score-card > strong, .pickem-score-card > em { display: block; }
+.pickem-score-card > span { font: 7px "IBM Plex Mono"; letter-spacing: .1em; }
+.pickem-score-card > strong { margin-top: 8px; font: 34px "Archivo Black"; line-height: 1; }
+.pickem-score-card > strong small { margin-left: 5px; font: 8px "IBM Plex Mono"; }
+.pickem-score-card > em { margin-top: 7px; font: normal 7px "IBM Plex Mono"; letter-spacing: .08em; }
+.pickem-score-card.passed { color: #25e9ff; }
+.pickem-score-card.failed { color: #ff3c65; background: rgba(255,60,101,.045); box-shadow: 0 0 20px rgba(255,60,101,.12); }
+.pickem-score-card.unset { color: #666b75; background: #0d0f13; box-shadow: none; }
 .final-result-content {
-  min-height: 0; padding-top: 210px; display: flex; flex-direction: column; gap: 46px;
+  min-height: 0; padding-top: 80px; display: flex; flex-direction: column; gap: 46px;
 }
 .final-result-content .result-group { width: 100%; margin: 0; }
 .result-group { margin-bottom: 14px; overflow: hidden; border: 1px solid; border-radius: 4px; }

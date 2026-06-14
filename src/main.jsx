@@ -534,7 +534,7 @@ function PredictionPanel({ stageNumber, teams, value, onSave, onAnalyze, analysi
   );
 }
 
-function SwissStage({ number, simulation, onPick, locked, onNavigate, onEditTeams, onOpenPrediction, finishedMatches, recommendations }) {
+function SwissStage({ number, simulation, prediction, onPick, locked, onNavigate, onEditTeams, onOpenPrediction, finishedMatches, recommendations }) {
   const recommendedByMatch = new Map((recommendations ?? []).map(match => {
     const aOutcome = match.outcomes[match.a.name];
     const bOutcome = match.outcomes[match.b.name];
@@ -542,6 +542,9 @@ function SwissStage({ number, simulation, onPick, locked, onNavigate, onEditTeam
     const bRate = bOutcome?.total ? bOutcome.passing / bOutcome.total : 0;
     return [`${match.roundIndex}-${match.matchIndex}`, aRate === bRate ? null : aRate > bRate ? match.a.name : match.b.name];
   }));
+  const normalizedPrediction = normalizePrediction(prediction);
+  const predictionComplete = predictionGroups.every(group => normalizedPrediction[group.key].length === group.limit);
+  const currentScore = predictionComplete ? predictionScore(simulation.records, normalizedPrediction) : null;
   if (locked) {
     return (
       <section className="locked-panel">
@@ -577,6 +580,11 @@ function SwissStage({ number, simulation, onPick, locked, onNavigate, onEditTeam
           ))}
           <section className="results-column">
             <header><span>最终结果</span><small>晋级 / 淘汰</small></header>
+            <div className={`pickem-score-card ${currentScore === null ? "unset" : currentScore >= 5 ? "passed" : "failed"}`}>
+              <span>当前十支预测命中</span>
+              <strong>{currentScore === null ? "－" : currentScore}<small>{currentScore === null ? "未设置" : "/ 10"}</small></strong>
+              <em>{currentScore === null ? "设置十支预测后显示" : currentScore >= 5 ? "预测通过" : "预测未通过"}</em>
+            </div>
             <div className="final-result-content">
               <ResultGroup title="晋级" teams={simulation.outcomeGroups["3:2"]} tone="qualified" record="3:2" />
               <ResultGroup title="淘汰" teams={simulation.outcomeGroups["2:3"]} tone="eliminated" record="2:3" />
@@ -875,7 +883,7 @@ function App() {
       <header className="site-header"><a className="brand" href="#" onClick={event => { event.preventDefault(); navigate(0); }}><span className="brand-icon">M</span><span><strong>MAJOR</strong><small>SIMULATOR</small></span></a><div className="event-pill"><span className="live-dot" /> COLOGNE 2026</div><div className="header-actions"><button className="admin-btn" onClick={() => setDataOpen(true)}>导入 / 导出</button><button className="admin-btn" onClick={() => setAdminOpen(true)}>管理员发布</button><button className="reset-btn" onClick={reset}>重新开始 ↺</button></div></header>
       <main>
         <nav className="stage-nav">{navItems.map(item => <button key={item.id} className={activePage === item.id ? "active" : ""} onClick={() => navigate(item.id)}><span>{item.icon}</span>{item.label}{item.id > 0 && !simulations[item.id - 1]?.complete && <i>LOCKED</i>}</button>)}</nav>
-        {activePage < 3 ? <SwissStage number={activePage + 1} simulation={simulations[activePage]} locked={activePage > 0 && !simulations[activePage - 1].complete} onPick={(r, m, team, event) => pickSwiss(activePage, r, m, team, event)} onNavigate={navigate} onEditTeams={() => setEditorStage(activePage + 1)} onOpenPrediction={() => setPredictionStage(activePage)} finishedMatches={finishedMatches} recommendations={predictionAnalysis[activePage]?.recommendations} /> : <Champions rounds={playoffRounds} onPick={pickPlayoff} locked={!stage3.complete} onNavigate={navigate} finishedMatches={finishedMatches} />}
+        {activePage < 3 ? <SwissStage number={activePage + 1} simulation={simulations[activePage]} prediction={outcomePredictions[activePage]} locked={activePage > 0 && !simulations[activePage - 1].complete} onPick={(r, m, team, event) => pickSwiss(activePage, r, m, team, event)} onNavigate={navigate} onEditTeams={() => setEditorStage(activePage + 1)} onOpenPrediction={() => setPredictionStage(activePage)} finishedMatches={finishedMatches} recommendations={predictionAnalysis[activePage]?.recommendations} /> : <Champions rounds={playoffRounds} onPick={pickPlayoff} locked={!stage3.complete} onNavigate={navigate} finishedMatches={finishedMatches} />}
       </main>
       <footer><span>MAJOR SIMULATOR / 2026</span><span>三胜晋级 · 三负淘汰 · 最终进入淘汰赛</span></footer>
       {editorStage === 1 && <TeamEditor teams={stageOneTeams} defaults={defaultStageOneTeams} stageNumber={1} onSave={saveStageOneTeams} onClose={() => setEditorStage(null)} />}
