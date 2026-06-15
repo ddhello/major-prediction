@@ -201,7 +201,7 @@ function deriveSwiss(participants, picks) {
 function predictionScore(records, prediction) {
   const finalByName = new Map(records.map(record => [record.team.name, record]));
   return (prediction["3:0"] ?? []).filter(name => finalByName.get(name)?.wins === 3 && finalByName.get(name)?.losses === 0).length
-    + (prediction.advance ?? []).filter(name => finalByName.get(name)?.wins === 3).length
+    + (prediction.advance ?? []).filter(name => finalByName.get(name)?.wins === 3 && finalByName.get(name)?.losses > 0).length
     + (prediction["0:3"] ?? []).filter(name => finalByName.get(name)?.wins === 0 && finalByName.get(name)?.losses === 3).length;
 }
 
